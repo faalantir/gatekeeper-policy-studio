@@ -134,7 +134,7 @@ export default function Dashboard() {
                 <YAxis stroke="#9CA3AF" fontSize={12} tickFormatter={(value) => `$${value}`} tickLine={false} axisLine={false} />
                 <Tooltip 
                   contentStyle={{ backgroundColor: '#111827', border: '1px solid #374151', borderRadius: '8px', color: '#F3F4F6' }}
-                  formatter={(value: number, name: string) => [`$${value}`, name === 'actualSpend' ? 'Actual Spend' : 'Unprotected Spend']}
+                  formatter={(value: any, name: any) => [`$${value}`, name === 'actualSpend' ? 'Actual Spend' : 'Unprotected Spend']}
                 />
                 <Area type="monotone" dataKey="unprotectedSpend" stackId="1" stroke="#EF4444" fill="#EF4444" fillOpacity={0.1} />
                 <Area type="monotone" dataKey="actualSpend" stackId="1" stroke="#10B981" fill="#10B981" fillOpacity={0.4} />
