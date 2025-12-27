@@ -1,180 +1,182 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Shield, DollarSign, AlertTriangle, Activity, Server } from 'lucide-react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import React, { useState, useEffect } from 'react';
+import { 
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, 
+  BarChart, Bar, Legend 
+} from 'recharts';
+import { Shield, AlertTriangle, Activity, DollarSign, Users, CheckCircle, User } from 'lucide-react';
 
+// --- TYPES ---
 interface LogEntry {
   timestamp: string;
+  team: string;
+  user: string;      // New field
   action: string;
   reason: string;
   mode: string;
+  cost: number;
 }
-
-const CHART_DATA = [
-  { time: '10am', actualSpend: 120, unprotectedSpend: 380 },
-  { time: '11am', actualSpend: 140, unprotectedSpend: 420 },
-  { time: '12pm', actualSpend: 110, unprotectedSpend: 450 },
-  { time: '1pm', actualSpend: 160, unprotectedSpend: 520 },
-  { time: '2pm', actualSpend: 130, unprotectedSpend: 480 },
-  { time: '3pm', actualSpend: 150, unprotectedSpend: 510 },
-  { time: '4pm', actualSpend: 140, unprotectedSpend: 490 },
-];
 
 export default function Dashboard() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [connectionStatus, setConnectionStatus] = useState("CONNECTING...");
+  const [loading, setLoading] = useState(true);
 
+  // --- FETCH DATA ---
+  const fetchLogs = async () => {
+    try {
+      // Point this to your localhost or App Runner URL
+      const res = await fetch(process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8080/logs');
+      const data = await res.json();
+      setLogs(data);
+      setLoading(false);
+    } catch (error) {
+      console.error("Failed to fetch logs:", error);
+    }
+  };
+
+  // Poll every 2 seconds
   useEffect(() => {
-    const fetchLogs = async () => {
-      try {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8080';
-      
-        const response = await fetch(`${apiUrl}/logs`);
-        if (response.ok) {
-          const data = await response.json();
-          // FIX: Ensure data is actually an array before setting it
-          if (Array.isArray(data)) {
-            setLogs(data);
-            setConnectionStatus("ONLINE");
-          } else {
-            console.error("Received non-array data:", data);
-            setLogs([]); // Fallback to empty list
-          }
-        } else {
-          setConnectionStatus("ERROR");
-        }
-      } catch (error) {
-        setConnectionStatus("OFFLINE");
-      }
-    };
-
     fetchLogs();
     const interval = setInterval(fetchLogs, 2000);
     return () => clearInterval(interval);
   }, []);
 
-  // FIX: Safety check before running .filter or accessing index [0]
-  const safeLogs = Array.isArray(logs) ? logs : [];
-  const currentMode = safeLogs.length > 0 ? safeLogs[0].mode : "UNKNOWN";
-  const blockedCount = safeLogs.filter(l => l.action === 'BLOCKED').length;
+  // --- CALCULATIONS ---
+  const totalSpend = logs.reduce((acc, log) => acc + (log.cost || 0), 0);
+  const blockedCount = logs.filter(l => l.action === 'BLOCKED').length;
+  const safeCount = logs.filter(l => l.action === 'ALLOWED').length;
+
+  // Group Spend by Team for the Chart
+  const spendByTeam = logs.reduce((acc, log) => {
+    acc[log.team] = (acc[log.team] || 0) + (log.cost || 0);
+    return acc;
+  }, {} as Record<string, number>);
+
+  const chartData = Object.keys(spendByTeam).map(team => ({
+    name: team,
+    cost: spendByTeam[team]
+  }));
 
   return (
-    <div className="min-h-screen bg-black text-white p-6 font-mono">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-8 flex justify-between items-end">
-          <div>
-            <h1 className="text-3xl font-bold text-white mb-2 flex items-center gap-3">
-              <Shield className="text-blue-500" size={32} />
-              GateKeeper Policy Studio
-            </h1>
-            <p className="text-gray-400">AI Firewall Monitoring Dashboard</p>
-          </div>
-          <div className="flex items-center gap-2 text-xs text-gray-500">
-            <div className={`w-2 h-2 rounded-full ${connectionStatus === 'ONLINE' ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
-            Server: {connectionStatus}
+    <div className="min-h-screen bg-gray-900 text-gray-100 p-8 font-sans">
+      {/* HEADER */}
+      <header className="flex justify-between items-center mb-10 border-b border-gray-800 pb-6">
+        <div>
+          <h1 className="text-3xl font-bold text-white flex items-center gap-3">
+            <Shield className="w-8 h-8 text-emerald-400" />
+            GateKeeper <span className="text-gray-500 font-light">Governance</span>
+          </h1>
+          <p className="text-gray-400 mt-1">Real-time AI Cost & Security Control Plane</p>
+        </div>
+        <div className="flex gap-4">
+          <div className="px-4 py-2 bg-gray-800 rounded-lg border border-gray-700">
+            <span className="text-xs text-gray-400 uppercase tracking-wider">Status</span>
+            <div className="flex items-center gap-2 mt-1">
+              <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+              <span className="font-semibold text-emerald-400">System Active</span>
+            </div>
           </div>
         </div>
+      </header>
 
-        {/* Status Cards - Top Row */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          
-          {/* Status Card */}
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 shadow-lg">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-200">System Mode</h3>
-              <Activity className="text-gray-400" size={20} />
-            </div>
-            <div className="flex items-center gap-3">
-              <div className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                  currentMode === 'ENFORCE' ? 'bg-red-600' : 'bg-yellow-600'
-                }`}>
-                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                    currentMode === 'ENFORCE' ? 'translate-x-6' : 'translate-x-1'
-                  }`}
-                />
-              </div>
-              <span className={`font-bold tracking-wider ${currentMode === 'ENFORCE' ? 'text-red-400' : 'text-yellow-400'}`}>
-                {currentMode} MODE
-              </span>
-            </div>
-            <p className="text-xs text-gray-500 mt-2">Controlled via AWS S3</p>
+      {/* KPI CARDS */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
+        <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-gray-400 text-sm font-medium">Total Spend (Session)</h3>
+            <DollarSign className="w-5 h-5 text-emerald-400" />
           </div>
-
-          {/* Savings Card */}
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 shadow-lg">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-200">Projected Savings</h3>
-              <DollarSign className="text-green-400" size={20} />
-            </div>
-            <div className="text-3xl font-bold text-green-400">$1,420.50</div>
-            <p className="text-sm text-gray-400 mt-1">Based on token reduction</p>
-          </div>
-
-          {/* Threats Card */}
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 shadow-lg">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-200">Threats Blocked</h3>
-              <AlertTriangle className="text-red-400" size={20} />
-            </div>
-            <div className="text-3xl font-bold text-red-400">{blockedCount}</div>
-            <p className="text-sm text-gray-400 mt-1">In current session</p>
-          </div>
+          <p className="text-4xl font-bold text-white">${totalSpend.toFixed(5)}</p>
+          <p className="text-xs text-gray-500 mt-2">Real-time estimate</p>
         </div>
 
-        {/* Analytics Chart */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-8 shadow-lg">
-          <h3 className="text-lg font-semibold text-gray-200 mb-6">Cost Analysis</h3>
-          <div className="h-80">
+        <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-gray-400 text-sm font-medium">Active Teams</h3>
+            <Users className="w-5 h-5 text-blue-400" />
+          </div>
+          <p className="text-4xl font-bold text-white">{Object.keys(spendByTeam).length}</p>
+        </div>
+
+        <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-gray-400 text-sm font-medium">Threats Blocked</h3>
+            <AlertTriangle className="w-5 h-5 text-red-400" />
+          </div>
+          <p className="text-4xl font-bold text-white">{blockedCount}</p>
+        </div>
+
+        <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-gray-400 text-sm font-medium">Safe Requests</h3>
+            <CheckCircle className="w-5 h-5 text-emerald-400" />
+          </div>
+          <p className="text-4xl font-bold text-white">{safeCount}</p>
+        </div>
+      </div>
+
+      {/* CHARTS SECTION */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-10">
+        {/* COST BY TEAM CHART */}
+        <div className="col-span-2 bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg">
+          <h3 className="text-lg font-semibold text-white mb-6 flex items-center gap-2">
+            <Activity className="w-5 h-5 text-blue-400" />
+            Cost Distribution by Team
+          </h3>
+          <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={CHART_DATA}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" vertical={false} />
-                <XAxis dataKey="time" stroke="#9CA3AF" fontSize={12} tickLine={false} axisLine={false} />
-                <YAxis stroke="#9CA3AF" fontSize={12} tickFormatter={(value) => `$${value}`} tickLine={false} axisLine={false} />
-                <Tooltip 
-                  contentStyle={{ backgroundColor: '#111827', border: '1px solid #374151', borderRadius: '8px', color: '#F3F4F6' }}
-                  formatter={(value: any, name: any) => [`$${value}`, name === 'actualSpend' ? 'Actual Spend' : 'Unprotected Spend']}
+              <BarChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                <XAxis dataKey="name" stroke="#9CA3AF" />
+                <YAxis stroke="#9CA3AF" />
+                <RechartsTooltip 
+                  contentStyle={{ backgroundColor: '#111827', border: '1px solid #374151', borderRadius: '8px' }}
+                  cursor={{fill: '#374151', opacity: 0.4}}
+                  formatter={(value: any) => [`$${value}`, 'Cost']}
                 />
-                <Area type="monotone" dataKey="unprotectedSpend" stackId="1" stroke="#EF4444" fill="#EF4444" fillOpacity={0.1} />
-                <Area type="monotone" dataKey="actualSpend" stackId="1" stroke="#10B981" fill="#10B981" fillOpacity={0.4} />
-              </AreaChart>
+                <Legend />
+                <Bar dataKey="cost" fill="#3B82F6" radius={[4, 4, 0, 0]} name="Estimated Cost ($)" />
+              </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* Live Logs */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 shadow-lg">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-lg font-semibold text-gray-200 flex items-center gap-2">
-              <Server size={18} className="text-blue-400" />
-              Live Activity Logs
-            </h3>
-            <span className="text-xs text-gray-500 animate-pulse">● Polling http://127.0.0.1:3000/logs</span>
-          </div>
-          
-          <div className="bg-black rounded-lg p-4 h-80 overflow-y-auto font-mono text-sm border border-gray-800 custom-scrollbar">
-            {safeLogs.length === 0 ? (
-              <div className="text-gray-600 text-center py-10">Waiting for traffic...</div>
-            ) : (
-              safeLogs.map((log, index) => (
-                <div key={index} className="mb-3 pb-3 border-b border-gray-900 last:border-0 hover:bg-gray-900/30 p-2 rounded transition-colors">
-                  <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-3">
-                      <span className="text-gray-500">[{log.timestamp}]</span>
-                      <span className={`font-bold px-2 py-0.5 rounded text-xs ${
-                        log.action === 'BLOCKED' ? 'bg-red-900/30 text-red-400 border border-red-900/50' : 'bg-green-900/30 text-green-400 border border-green-900/50'
-                      }`}>
-                        {log.action}
-                      </span>
-                    </div>
-                    <span className="text-xs text-gray-600 uppercase">{log.mode} MODE</span>
+        {/* LOGS LIST */}
+        <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg overflow-hidden">
+          <h3 className="text-lg font-semibold text-white mb-4">Live Transaction Feed</h3>
+          <div className="overflow-y-auto h-64 space-y-3 pr-2">
+            {logs.map((log, i) => (
+              <div key={i} className={`p-3 rounded-lg border flex justify-between items-center ${
+                log.action === 'BLOCKED' 
+                  ? 'bg-red-900/20 border-red-800/50' 
+                  : 'bg-emerald-900/10 border-emerald-800/30'
+              }`}>
+                <div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-mono text-gray-500">{log.timestamp}</span>
+                    <span className="flex items-center gap-1 text-sm font-medium text-gray-200 capitalize">
+                       <User className="w-3 h-3 text-gray-500" />
+                       {log.user || 'Anonymous'} 
+                    </span>
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-gray-700 text-gray-300">
+                        {log.team}
+                    </span>
                   </div>
-                  <div className="pl-[5.5rem] text-gray-300">
-                    {log.reason}
-                  </div>
+                  <p className="text-xs text-gray-400 mt-1 pl-11">{log.reason}</p>
                 </div>
-              ))
+                <div className="text-right">
+                  <div className={`text-sm font-bold ${
+                    log.action === 'BLOCKED' ? 'text-red-400' : 'text-emerald-400'
+                  }`}>
+                    {log.action}
+                  </div>
+                  <div className="text-xs text-gray-500 font-mono">${(log.cost || 0).toFixed(5)}</div>
+                </div>
+              </div>
+            ))}
+            {logs.length === 0 && (
+              <div className="text-center text-gray-500 py-10">Waiting for traffic...</div>
             )}
           </div>
         </div>
